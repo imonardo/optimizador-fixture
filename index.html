@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optimización de Fixture — Taller de Ciencia de Datos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Roboto+Condensed:wght@400;700&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <img class="header-logo" src="marcaexactas.png" alt="Facultad de Ciencias Exactas y Naturales - UBA">
+  <div class="header-text">
+    <h1>Optimización de Fixture</h1>
+    <p class="subtitle">Armamos el modelo matemático juntos: elegís las restricciones y el programa encuentra el fixture que minimiza los kilómetros recorridos.</p>
+  </div>
+</header>
+
+<div class="app-container">
+
+  <section class="card">
+    <h2>1. Los datos: 10 clubes y sus distancias reales</h2>
+    <p class="hint">Estas son las distancias reales (en línea recta) entre los estadios de 10 clubes argentinos. Este dato de entrada ya está armado — el modelo lo va a usar para decidir el fixture.</p>
+    <div id="clubes-container" class="clubes-wrapper"></div>
+    <div id="distancias-container" class="matriz-wrapper"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Restricciones del modelo</h2>
+    <p class="hint">Cada restricción es una condición que el fixture tiene que cumplir sí o sí (o que decidís agregar). A la derecha de cada una vas a ver cómo se escribe matemáticamente.</p>
+
+    <div class="restriccion-item core">
+      <label class="switch-row">
+        <input type="checkbox" checked disabled>
+        <span>Todos contra todos (round-robin simple)</span>
+      </label>
+      <p class="restriccion-formula">Para cada par de equipos i≠j: &nbsp; Σ<sub>k</sub> (x<sub>i,j,k</sub> + x<sub>j,i,k</sub>) = 1</p>
+    </div>
+
+    <div class="restriccion-item core">
+      <label class="switch-row">
+        <input type="checkbox" checked disabled>
+        <span>Un partido por fecha por equipo</span>
+      </label>
+      <p class="restriccion-formula">Para cada equipo i y cada fecha k: &nbsp; Σ<sub>j≠i</sub> (x<sub>i,j,k</sub> + x<sub>j,i,k</sub>) = 1</p>
+    </div>
+
+    <div class="restriccion-item">
+      <label class="switch-row">
+        <input type="checkbox" id="toggle-localia">
+        <span>Equilibrio de localías (diferencia local/visitante ≤ 1)</span>
+      </label>
+      <p class="restriccion-formula">Para cada equipo i: &nbsp; -1 ≤ Σ<sub>j,k</sub> x<sub>i,j,k</sub> − Σ<sub>j,k</sub> x<sub>j,i,k</sub> ≤ 1</p>
+    </div>
+
+    <div class="restriccion-item">
+      <label class="switch-row">
+        <input type="checkbox" id="toggle-rachas">
+        <span>Sin rachas de más de 2 partidos seguidos en la misma condición</span>
+      </label>
+      <p class="restriccion-formula">Para cada equipo i y cada ventana de 3 fechas consecutivas: &nbsp; 1 ≤ Σ<sub>j</sub> x<sub>i,j,k</sub> + x<sub>i,j,k+1</sub> + x<sub>i,j,k+2</sub> ≤ 2</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Función objetivo</h2>
+    <p class="hint">Esto es lo que el modelo va a minimizar: la suma de los kilómetros que viaja cada equipo que visita a otro.</p>
+    <p class="restriccion-formula objetivo">Minimizar &nbsp; Σ<sub>i,j,k</sub> distancia(i,j) · x<sub>i,j,k</sub></p>
+  </section>
+
+  <section class="card">
+    <h2>4. Resolver</h2>
+    <button id="btn-resolver" class="btn">Resolver con Programación Lineal Entera</button>
+    <p id="estado-resolucion" class="hint"></p>
+  </section>
+
+  <section class="card" id="resultado-card" hidden>
+    <h2>Resultado</h2>
+    <p id="resultado-resumen" class="resultado-resumen"></p>
+    <div id="resultado-tablero" class="tablero-wrapper"></div>
+  </section>
+
+</div>
+
+<footer class="app-footer">
+  Taller de Ciencia de Datos — Facultad de Ciencias Exactas y Naturales, UBA
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/highs@1.15.2/build/highs.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
