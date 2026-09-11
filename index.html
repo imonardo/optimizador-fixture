@@ -50,10 +50,11 @@
 
     <div class="restriccion-item">
       <label class="switch-row">
-        <input type="checkbox" id="toggle-localia">
+        <input type="checkbox" id="toggle-localia" checked>
         <span>Equilibrio de localías (diferencia local/visitante ≤ 1)</span>
       </label>
       <p class="restriccion-formula">Para cada equipo i: &nbsp; -1 ≤ Σ<sub>j,k</sub> x<sub>i,j,k</sub> − Σ<sub>j,k</sub> x<sub>j,i,k</sub> ≤ 1</p>
+      <p class="hint">Recomendado dejarla activada: sin ella, el modelo puede armar fixtures raros (un equipo de visitante casi siempre) que igual minimizan el objetivo.</p>
     </div>
 
     <div class="restriccion-item">
@@ -63,12 +64,28 @@
       </label>
       <p class="restriccion-formula">Para cada equipo i y cada ventana de 3 fechas consecutivas: &nbsp; 1 ≤ Σ<sub>j</sub> x<sub>i,j,k</sub> + x<sub>i,j,k+1</sub> + x<sub>i,j,k+2</sub> ≤ 2</p>
     </div>
+
+    <div class="restriccion-item">
+      <label class="switch-row">
+        <input type="checkbox" id="toggle-clasico" checked>
+        <span>El clásico (River – Boca) se juega en la fecha 5</span>
+      </label>
+      <p class="restriccion-formula">x<sub>local,visitante,5</sub> = 1</p>
+      <label class="select-inline">
+        ¿Quién juega de local?
+        <select id="select-clasico-local">
+          <option value="river">River</option>
+          <option value="boca">Boca</option>
+        </select>
+      </label>
+    </div>
   </section>
 
   <section class="card">
     <h2>3. Función objetivo</h2>
-    <p class="hint">Esto es lo que el modelo va a minimizar: la suma de los kilómetros que viaja cada equipo que visita a otro.</p>
-    <p class="restriccion-formula objetivo">Minimizar &nbsp; Σ<sub>i,j,k</sub> distancia(i,j) · x<sub>i,j,k</sub></p>
+    <p class="hint">Sumar la distancia total de todos los partidos no sirve como objetivo: como cada par se enfrenta una sola vez y la distancia es simétrica (A–B mide lo mismo que B–A), esa suma es siempre la misma, no importa cómo armes el fixture. Lo que sí varía es <strong>cómo se reparte</strong> esa distancia entre los equipos.</p>
+    <p class="hint">Para cada equipo calculamos su "distancia promedio natural" a los demás (un dato fijo, geográfico). El objetivo es que la distancia que <strong>realmente</strong> recorre de visitante quede lo más cerca posible de esa distancia promedio multiplicada por la cantidad de partidos que le toque de visitante — para que nadie viaje sistemáticamente más o menos de lo esperado.</p>
+    <p class="restriccion-formula objetivo">Minimizar &nbsp; Σ<sub>equipo i</sub> &nbsp; | distancia_real_recorrida(i) − distancia_promedio(i) × partidos_visitante(i) |</p>
   </section>
 
   <section class="card">
@@ -81,6 +98,8 @@
     <h2>Resultado</h2>
     <p id="resultado-resumen" class="resultado-resumen"></p>
     <div id="resultado-tablero" class="tablero-wrapper"></div>
+    <h3 class="subtitulo-resultado">Distancia recorrida por equipo</h3>
+    <div id="resultado-equipos" class="matriz-wrapper"></div>
   </section>
 
 </div>

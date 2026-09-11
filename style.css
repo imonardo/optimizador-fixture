@@ -148,6 +148,34 @@ h1, h2, h3 { font-family: var(--font-heading); font-weight: 500; margin: 0; }
   background: var(--green-bg);
 }
 
+.select-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0 26px;
+  font-family: var(--font-text);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.select-inline select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  background: white;
+}
+
+.subtitulo-resultado {
+  font-size: 0.95rem;
+  color: var(--azul);
+  margin: 16px 0 10px;
+}
+
+.equipos-resumen { font-size: 0.8rem; }
+.equipos-resumen th, .equipos-resumen td { min-width: 90px; height: auto; padding: 6px 8px; }
+.equipos-resumen tbody th { min-width: 160px; }
+
 .btn {
   display: inline-block;
   padding: 12px 20px;
