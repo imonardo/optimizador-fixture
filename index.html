@@ -116,13 +116,17 @@
         <input type="radio" name="objetivo" value="distancia">
         <span>Minimizar la desviación de la distancia promedio por equipo</span>
       </label>
-      <p class="hint">Para cada equipo calculamos su "distancia promedio natural" a los demás (un dato fijo, geográfico). El objetivo es que la distancia que <strong>realmente</strong> recorre de visitante quede lo más cerca posible de esa distancia promedio multiplicada por la cantidad de partidos que le toque de visitante.</p>
-      <p class="restriccion-formula objetivo">Minimizar &nbsp; Σ<sub>equipo i</sub> &nbsp; | distancia_real_recorrida(i) − distancia_promedio(i) × partidos_visitante(i) |</p>
+      <p class="hint">Para cada equipo calculamos su "distancia promedio natural" a los demás (un dato fijo, geográfico). El objetivo es que la distancia que <strong>realmente</strong> recorre de visitante quede lo más cerca posible de esa distancia promedio multiplicada por la cantidad <strong>esperada</strong> de partidos de visitante (4.5, no la cantidad real) — si usáramos la cantidad real, un equipo con muchos partidos de visitante de más "se beneficiaría" con más presupuesto en vez de que se lo penalice.</p>
+      <p class="restriccion-formula objetivo">Minimizar &nbsp; Σ<sub>equipo i</sub> &nbsp; | distancia_real_recorrida(i) − distancia_promedio(i) × 4.5 |</p>
     </div>
   </section>
 
   <section class="card">
     <h2>4. Resolver</h2>
+    <label class="select-inline tiempo-limite">
+      Tiempo máximo de resolución (segundos)
+      <input type="number" id="input-tiempo-limite" min="1" max="300" value="45">
+    </label>
     <button id="btn-resolver" class="btn">Resolver con Programación Lineal Entera</button>
     <p id="estado-resolucion" class="hint"></p>
   </section>
@@ -134,6 +138,7 @@
     <h3 class="subtitulo-resultado">Local (L) / Visitante (V) por fecha</h3>
     <div id="resultado-localia" class="matriz-wrapper"></div>
     <h3 class="subtitulo-resultado">Distancia recorrida por equipo</h3>
+    <p class="hint">"Distancia total / 4.5" divide por la cantidad <strong>esperada</strong> de partidos de visitante (no la real): así un equipo al que le tocaron muchos partidos de visitante no "esconde" ese desbalance detrás de un promedio bajo.</p>
     <div id="resultado-equipos" class="matriz-wrapper"></div>
   </section>
 

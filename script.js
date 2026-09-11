@@ -177,27 +177,33 @@ function construirModeloLP(distancias, opciones) {
   // - 'distancia' (default): para cada equipo, que la distancia total que
   //   recorre de visitante esté lo más cerca posible de "su distancia
   //   promedio natural a los demás equipos" multiplicada por la cantidad de
-  //   partidos que le toque jugar de visitante. d_m es el valor absoluto de
-  //   esa desviación (linealizado con las dos restricciones de siempre:
-  //   d >= expr, d >= -expr).
+  //   partidos de visitante ESPERADA (rounds/2, ej. 4.5 para 10 equipos) —
+  //   no la cantidad real, porque si no un equipo con muchos más partidos de
+  //   visitante "se beneficia" con más presupuesto en vez de ser penalizado.
+  //   d_m es el valor absoluto de esa desviación (linealizado con las dos
+  //   restricciones de siempre: d >= expr, d >= -expr).
   let objTerms = ['0'];
   if (opciones.objetivo === 'distancia') {
     const avgDist = calcularDistanciasPromedio(distancias);
+    const partidosVisitanteEsperados = rounds / 2;
     const dVars = [];
     for (let m = 0; m < n; m++) {
-      const terms = []; // { coef, nombre }, expresión = distTravel_m - avg_m * away_m
+      const terms = []; // { coef, nombre }, expresión = distTravel_m (el "esperado" es una constante)
       for (let i = 0; i < n; i++) {
         if (i === m) continue;
         for (let k = 0; k < rounds; k++) {
-          terms.push({ coef: distancias[i][m] - avgDist[m], nombre: varName(i, m, k) });
+          terms.push({ coef: distancias[i][m], nombre: varName(i, m, k) });
         }
       }
+      const esperado_m = avgDist[m] * partidosVisitanteEsperados;
       const dName = `d_${m}`;
       dVars.push(dName);
       const exprMasTerms = terms.map((t) => formatSignedTerm(t.coef, t.nombre)).join(' ');
       const exprMenosTerms = terms.map((t) => formatSignedTerm(-t.coef, t.nombre)).join(' ');
-      constraints.push(` c${cIdx++}: ${dName} ${exprMenosTerms} >= 0`);
-      constraints.push(` c${cIdx++}: ${dName} ${exprMasTerms} >= 0`);
+      // d_m >= distTravel_m - esperado_m  →  d_m - distTravel_m >= -esperado_m
+      constraints.push(` c${cIdx++}: ${dName} ${exprMenosTerms} >= ${-redondear(esperado_m, 6)}`);
+      // d_m >= esperado_m - distTravel_m  →  d_m + distTravel_m >= esperado_m
+      constraints.push(` c${cIdx++}: ${dName} ${exprMasTerms} >= ${redondear(esperado_m, 6)}`);
     }
     objTerms = dVars;
   }
@@ -249,6 +255,8 @@ function construirMatrizLocaliaVisitante(partidos, n, rounds) {
 // partidos de visitante, promedio real, y su promedio "natural" (geográfico).
 function calcularResumenPorEquipo(partidos, distancias) {
   const n = distancias.length;
+  const rounds = n - 1;
+  const partidosVisitanteEsperados = rounds / 2; // ej. 4.5 para 10 equipos
   const avgDist = calcularDistanciasPromedio(distancias);
   const resumen = Array.from({ length: n }, () => ({ totalVisitante: 0, partidosVisitante: 0 }));
   partidos.forEach((p) => {
@@ -258,7 +266,10 @@ function calcularResumenPorEquipo(partidos, distancias) {
   return resumen.map((r, i) => ({
     totalVisitante: r.totalVisitante,
     partidosVisitante: r.partidosVisitante,
-    promedioReal: r.partidosVisitante > 0 ? r.totalVisitante / r.partidosVisitante : 0,
+    // Se divide por la cantidad ESPERADA de partidos de visitante (no la real):
+    // si no, un equipo con muchos más partidos de visitante que lo esperado
+    // parece tener un promedio bajo aunque haya viajado mucho más en total.
+    promedioReal: r.totalVisitante / partidosVisitanteEsperados,
     promedioNatural: avgDist[i],
   }));
 }
@@ -280,6 +291,7 @@ class OptimizadorApp {
       toggleParAlternado: document.getElementById('toggle-par-alternado'),
       toggleAlternarExtremos: document.getElementById('toggle-alternar-extremos'),
       objetivoRadios: document.querySelectorAll('input[name="objetivo"]'),
+      inputTiempoLimite: document.getElementById('input-tiempo-limite'),
       btnResolver: document.getElementById('btn-resolver'),
       estadoResolucion: document.getElementById('estado-resolucion'),
       resultadoCard: document.getElementById('resultado-card'),
@@ -335,7 +347,9 @@ class OptimizadorApp {
 
     try {
       const highs = await this.cargarHighs();
-      this.dom.estadoResolucion.textContent = 'Resolviendo el modelo (puede tardar hasta 45 segundos, es un problema de optimización combinatoria real)…';
+      let tiempoLimite = parseInt(this.dom.inputTiempoLimite.value, 10);
+      if (isNaN(tiempoLimite) || tiempoLimite < 1) tiempoLimite = 45;
+      this.dom.estadoResolucion.textContent = `Resolviendo el modelo (puede tardar hasta ${tiempoLimite} segundos, es un problema de optimización combinatoria real)…`;
 
       const riverIdx = CLUBES.findIndex((c) => c.nombre === 'River');
       const bocaIdx = CLUBES.findIndex((c) => c.nombre === 'Boca');
@@ -362,7 +376,7 @@ class OptimizadorApp {
       await new Promise((r) => setTimeout(r, 30));
 
       const t0 = performance.now();
-      const solucion = highs.solve(lp, { output_flag: false, time_limit: 45, mip_rel_gap: 0.01 });
+      const solucion = highs.solve(lp, { output_flag: false, time_limit: tiempoLimite, mip_rel_gap: 0.01 });
       const segundos = ((performance.now() - t0) / 1000).toFixed(1);
 
       if (solucion.Status === 'Infeasible') {
@@ -430,7 +444,7 @@ class OptimizadorApp {
     this.dom.resultadoLocalia.innerHTML = htmlLV;
 
     const resumen = calcularResumenPorEquipo(partidos, this.distancias);
-    let tabla = '<table class="matriz-table equipos-resumen"><thead><tr><th>Equipo</th><th>Partidos de visitante</th><th>Distancia total</th><th>Promedio real</th><th>Promedio natural</th></tr></thead><tbody>';
+    let tabla = '<table class="matriz-table equipos-resumen"><thead><tr><th>Equipo</th><th>Partidos de visitante</th><th>Distancia total</th><th>Distancia total / 4.5</th><th>Promedio natural</th></tr></thead><tbody>';
     resumen.forEach((r, i) => {
       tabla += `<tr>
         <th>${escapeHtml(CLUBES[i].nombre)}</th>

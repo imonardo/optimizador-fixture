@@ -157,6 +157,9 @@ h1, h2, h3 { font-family: var(--font-heading); font-weight: 500; margin: 0; }
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+.tiempo-limite { margin-left: 0; margin-bottom: 14px; }
+.tiempo-limite input { width: 70px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-body); }
+
 .select-inline select {
   padding: 5px 8px;
   border: 1px solid var(--border);
