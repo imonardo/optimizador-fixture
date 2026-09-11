@@ -144,29 +144,63 @@ function construirModeloLP(distancias, opciones) {
     constraints.push(` c${cIdx++}: ${varName(local, visitante, fecha)} = 1`);
   }
 
-  // Objetivo: para cada equipo, que la distancia total que recorre de
-  // visitante esté lo más cerca posible de "su distancia promedio natural a
-  // los demás equipos" multiplicada por la cantidad de partidos que le toque
-  // jugar de visitante. d_m es el valor absoluto de esa desviación
-  // (linealizado con las dos restricciones de siempre: d >= expr, d >= -expr).
-  const avgDist = calcularDistanciasPromedio(distancias);
-  const dVars = [];
-  for (let m = 0; m < n; m++) {
-    const terms = []; // { coef, nombre }, expresión = distTravel_m - avg_m * away_m
-    for (let i = 0; i < n; i++) {
-      if (i === m) continue;
-      for (let k = 0; k < rounds; k++) {
-        terms.push({ coef: distancias[i][m] - avgDist[m], nombre: varName(i, m, k) });
-      }
+  const homeTermsDe = (i, k) => {
+    const terms = [];
+    for (let j = 0; j < n; j++) {
+      if (j !== i) terms.push(varName(i, j, k));
     }
-    const dName = `d_${m}`;
-    dVars.push(dName);
-    const exprMasTerms = terms.map((t) => formatSignedTerm(t.coef, t.nombre)).join(' ');
-    const exprMenosTerms = terms.map((t) => formatSignedTerm(-t.coef, t.nombre)).join(' ');
-    constraints.push(` c${cIdx++}: ${dName} ${exprMenosTerms} >= 0`);
-    constraints.push(` c${cIdx++}: ${dName} ${exprMasTerms} >= 0`);
+    return terms;
+  };
+
+  // (6) Opcional: dos equipos siempre en condición opuesta (si uno es local, el otro visitante).
+  if (opciones.parAlternado) {
+    const { a, b } = opciones.parAlternado;
+    for (let k = 0; k < rounds; k++) {
+      const terms = [...homeTermsDe(a, k), ...homeTermsDe(b, k)];
+      constraints.push(` c${cIdx++}: ${terms.join(' + ')} = 1`);
+    }
   }
-  const objTerms = dVars.map((v) => v);
+
+  // (7) Opcional: ningún equipo repite condición en las primeras 2 fechas, ni en las últimas 2.
+  if (opciones.alternarExtremos) {
+    for (let i = 0; i < n; i++) {
+      const primeras = [...homeTermsDe(i, 0), ...homeTermsDe(i, 1)];
+      constraints.push(` c${cIdx++}: ${primeras.join(' + ')} = 1`);
+      const ultimas = [...homeTermsDe(i, rounds - 2), ...homeTermsDe(i, rounds - 1)];
+      constraints.push(` c${cIdx++}: ${ultimas.join(' + ')} = 1`);
+    }
+  }
+
+  // Objetivo. Dos modos:
+  // - 'factible': una constante (0) — el solver se conforma con la primera
+  //   solución que cumpla las restricciones, no optimiza nada.
+  // - 'distancia' (default): para cada equipo, que la distancia total que
+  //   recorre de visitante esté lo más cerca posible de "su distancia
+  //   promedio natural a los demás equipos" multiplicada por la cantidad de
+  //   partidos que le toque jugar de visitante. d_m es el valor absoluto de
+  //   esa desviación (linealizado con las dos restricciones de siempre:
+  //   d >= expr, d >= -expr).
+  let objTerms = ['0'];
+  if (opciones.objetivo === 'distancia') {
+    const avgDist = calcularDistanciasPromedio(distancias);
+    const dVars = [];
+    for (let m = 0; m < n; m++) {
+      const terms = []; // { coef, nombre }, expresión = distTravel_m - avg_m * away_m
+      for (let i = 0; i < n; i++) {
+        if (i === m) continue;
+        for (let k = 0; k < rounds; k++) {
+          terms.push({ coef: distancias[i][m] - avgDist[m], nombre: varName(i, m, k) });
+        }
+      }
+      const dName = `d_${m}`;
+      dVars.push(dName);
+      const exprMasTerms = terms.map((t) => formatSignedTerm(t.coef, t.nombre)).join(' ');
+      const exprMenosTerms = terms.map((t) => formatSignedTerm(-t.coef, t.nombre)).join(' ');
+      constraints.push(` c${cIdx++}: ${dName} ${exprMenosTerms} >= 0`);
+      constraints.push(` c${cIdx++}: ${dName} ${exprMasTerms} >= 0`);
+    }
+    objTerms = dVars;
+  }
 
   const boundsLines = variables.map((v) => ` ${v} <= 1`);
   const generalLines = variables.map((v) => ` ${v}`);
@@ -201,6 +235,16 @@ function extraerFixture(solucion, n) {
   return partidos;
 }
 
+// Matriz equipo x fecha con 'L' (local) o 'V' (visitante) en cada celda.
+function construirMatrizLocaliaVisitante(partidos, n, rounds) {
+  const matriz = Array.from({ length: n }, () => new Array(rounds).fill(''));
+  partidos.forEach((p) => {
+    matriz[p.local][p.fecha] = 'L';
+    matriz[p.visitante][p.fecha] = 'V';
+  });
+  return matriz;
+}
+
 // Resumen por equipo: distancia total recorrida de visitante, cantidad de
 // partidos de visitante, promedio real, y su promedio "natural" (geográfico).
 function calcularResumenPorEquipo(partidos, distancias) {
@@ -233,10 +277,14 @@ class OptimizadorApp {
       toggleRachas: document.getElementById('toggle-rachas'),
       toggleClasico: document.getElementById('toggle-clasico'),
       selectClasicoLocal: document.getElementById('select-clasico-local'),
+      toggleParAlternado: document.getElementById('toggle-par-alternado'),
+      toggleAlternarExtremos: document.getElementById('toggle-alternar-extremos'),
+      objetivoRadios: document.querySelectorAll('input[name="objetivo"]'),
       btnResolver: document.getElementById('btn-resolver'),
       estadoResolucion: document.getElementById('estado-resolucion'),
       resultadoCard: document.getElementById('resultado-card'),
       resultadoResumen: document.getElementById('resultado-resumen'),
+      resultadoLocalia: document.getElementById('resultado-localia'),
       resultadoTablero: document.getElementById('resultado-tablero'),
       resultadoEquipos: document.getElementById('resultado-equipos'),
     };
@@ -289,13 +337,18 @@ class OptimizadorApp {
       const highs = await this.cargarHighs();
       this.dom.estadoResolucion.textContent = 'Resolviendo el modelo (puede tardar hasta 45 segundos, es un problema de optimización combinatoria real)…';
 
+      const riverIdx = CLUBES.findIndex((c) => c.nombre === 'River');
+      const bocaIdx = CLUBES.findIndex((c) => c.nombre === 'Boca');
+
+      const objetivoSeleccionado = Array.from(this.dom.objetivoRadios).find((r) => r.checked).value;
       const opciones = {
+        objetivo: objetivoSeleccionado,
         localia: this.dom.toggleLocalia.checked,
         rachas: this.dom.toggleRachas.checked,
+        parAlternado: this.dom.toggleParAlternado.checked ? { a: riverIdx, b: bocaIdx } : null,
+        alternarExtremos: this.dom.toggleAlternarExtremos.checked,
       };
       if (this.dom.toggleClasico.checked) {
-        const riverIdx = CLUBES.findIndex((c) => c.nombre === 'River');
-        const bocaIdx = CLUBES.findIndex((c) => c.nombre === 'Boca');
         const localEsRiver = this.dom.selectClasicoLocal.value === 'river';
         opciones.partidoFijo = {
           local: localEsRiver ? riverIdx : bocaIdx,
@@ -312,13 +365,19 @@ class OptimizadorApp {
       const solucion = highs.solve(lp, { output_flag: false, time_limit: 45, mip_rel_gap: 0.01 });
       const segundos = ((performance.now() - t0) / 1000).toFixed(1);
 
+      if (solucion.Status === 'Infeasible') {
+        this.dom.estadoResolucion.innerHTML =
+          '<strong>No existe ningún fixture que cumpla TODAS las restricciones elegidas (modelo infactible).</strong> ' +
+          'Es un resultado válido en optimización: a veces hay que resignar alguna restricción. Probá destildar alguna y volver a resolver.';
+        return;
+      }
       if (solucion.Status !== 'Optimal' && !solucion.Columns) {
         this.dom.estadoResolucion.textContent = `El solver no encontró una solución (estado: ${solucion.Status}).`;
         return;
       }
 
       const partidos = extraerFixture(solucion, CLUBES.length);
-      this.mostrarResultado(solucion, partidos, segundos);
+      this.mostrarResultado(solucion, partidos, segundos, objetivoSeleccionado);
       this.dom.estadoResolucion.textContent = '';
     } catch (err) {
       this.dom.estadoResolucion.textContent = 'Ocurrió un error al resolver. Revisá tu conexión a internet (el solver se carga desde un CDN).';
@@ -328,13 +387,16 @@ class OptimizadorApp {
     }
   }
 
-  mostrarResultado(solucion, partidos, segundos) {
+  mostrarResultado(solucion, partidos, segundos, objetivo) {
     const n = CLUBES.length;
     const rounds = n - 1;
     const optimo = solucion.Status === 'Optimal';
 
+    const tituloObjetivo = objetivo === 'distancia'
+      ? `Desviación total del objetivo: <strong>${Math.round(solucion.ObjectiveValue).toLocaleString('es-AR')} km</strong> `
+      : 'Solución factible encontrada (sin optimizar ningún objetivo) ';
     this.dom.resultadoResumen.innerHTML =
-      `Desviación total del objetivo: <strong>${Math.round(solucion.ObjectiveValue).toLocaleString('es-AR')} km</strong> ` +
+      tituloObjetivo +
       `— resuelto en ${segundos}s ` +
       (optimo ? '(óptimo garantizado)' : `<span class="badge-warn">(mejor solución encontrada, estado: ${escapeHtml(solucion.Status)})</span>`);
 
@@ -352,6 +414,20 @@ class OptimizadorApp {
       html += '</div>';
     }
     this.dom.resultadoTablero.innerHTML = html;
+
+    const matrizLV = construirMatrizLocaliaVisitante(partidos, n, rounds);
+    let htmlLV = '<table class="matriz-table"><thead><tr><th>Equipo</th>';
+    for (let k = 0; k < rounds; k++) htmlLV += `<th>F${k + 1}</th>`;
+    htmlLV += '</tr></thead><tbody>';
+    CLUBES.forEach((c, i) => {
+      htmlLV += `<tr><th>${escapeHtml(c.nombre)}</th>`;
+      matrizLV[i].forEach((cond) => {
+        htmlLV += `<td class="${cond === 'L' ? 'cell-local' : 'cell-visitante'}">${cond}</td>`;
+      });
+      htmlLV += '</tr>';
+    });
+    htmlLV += '</tbody></table>';
+    this.dom.resultadoLocalia.innerHTML = htmlLV;
 
     const resumen = calcularResumenPorEquipo(partidos, this.distancias);
     let tabla = '<table class="matriz-table equipos-resumen"><thead><tr><th>Equipo</th><th>Partidos de visitante</th><th>Distancia total</th><th>Promedio real</th><th>Promedio natural</th></tr></thead><tbody>';

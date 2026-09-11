@@ -176,6 +176,9 @@ h1, h2, h3 { font-family: var(--font-heading); font-weight: 500; margin: 0; }
 .equipos-resumen th, .equipos-resumen td { min-width: 90px; height: auto; padding: 6px 8px; }
 .equipos-resumen tbody th { min-width: 160px; }
 
+.cell-local { background: var(--green-bg); color: #106b3a; font-weight: 700; }
+.cell-visitante { background: var(--red-bg); color: var(--red); font-weight: 700; }
+
 .btn {
   display: inline-block;
   padding: 12px 20px;
